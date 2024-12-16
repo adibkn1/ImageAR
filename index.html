@@ -15,29 +15,48 @@
              vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
         
         <a-assets>
-            <!-- Replace with your image target file -->
-            <img id="card" src="https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948" />
-            
-            <!-- Video asset -->
-            <video id="video" src="https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/Boat_AR%20(1).mp4?v=1725460307294" 
-                   autoplay muted loop playsinline crossorigin="anonymous"></video>
+            <video id="video" 
+                   src="https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/Boat_AR%20(1).mp4?v=1725460307294" 
+                   preload="auto"
+                   loop
+                   crossorigin="anonymous"
+                   playsinline
+                   webkit-playsinline></video>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- Video plane in AR -->
-            <a-video src="#video" position="0 0 0" rotation="0 0 0" width="1" height="0.6"></a-video>
+            <a-video src="#video" position="0 0 0" rotation="0 0 0" width="0.56" height="1"></a-video>
         </a-entity>
     </a-scene>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             const video = document.querySelector('#video');
-            video.addEventListener('loadeddata', function () {
-                console.log('Video loaded');
+            const sceneEl = document.querySelector('a-scene');
+            const entity = document.querySelector('[mindar-image-target]');
+
+            // When target is found
+            entity.addEventListener('targetFound', function() {
+                console.log('Target found');
+                video.play()
+                    .then(() => console.log('Video playing'))
+                    .catch(e => console.error('Error playing video:', e));
             });
-            video.addEventListener('error', function (e) {
+
+            // When target is lost
+            entity.addEventListener('targetLost', function() {
+                console.log('Target lost');
+                video.pause();
+            });
+
+            // Additional error handling
+            video.addEventListener('loadeddata', function() {
+                console.log('Video data loaded');
+            });
+
+            video.addEventListener('error', function(e) {
                 console.error('Video error:', e);
             });
         });
