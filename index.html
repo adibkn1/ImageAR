@@ -23,7 +23,8 @@
                    loop
                    playsinline
                    webkit-playsinline
-                   crossorigin="anonymous"></video>
+                   crossorigin="anonymous"
+                   response-type="arraybuffer"></video>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
@@ -45,15 +46,6 @@
             const entity = document.querySelector('[mindar-image-target]');
             let isVideoReady = false;
 
-            // Enable audio context for iOS
-            function enableAudioContext() {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                const audioContext = new AudioContext();
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
-            }
-
             // Ensure video is loaded and ready
             video.addEventListener('loadeddata', function() {
                 console.log('Video data loaded');
@@ -65,21 +57,22 @@
             entity.addEventListener('targetFound', function() {
                 console.log('Target found');
                 if (isVideoReady) {
-                    enableAudioContext();
                     aVideo.setAttribute('visible', 'true');
-                    video.currentTime = 0; // Reset video to start
-                    
-                    // Force audio to play
-                    const playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        playPromise
-                            .then(() => {
-                                console.log('Video playing with sound');
-                                // Ensure volume is up
-                                video.volume = 1.0;
-                            })
-                            .catch(e => console.error('Error playing video:', e));
-                    }
+                    // Force video to play
+                    video.currentTime = 0;
+                    video.play()
+                        .then(() => {
+                            console.log('Video playing with sound');
+                            video.volume = 1.0;
+                        })
+                        .catch(e => {
+                            console.error('Error playing video:', e);
+                            // Try playing without sound if initial attempt fails
+                            video.muted = true;
+                            video.play().then(() => {
+                                video.muted = false;
+                            });
+                        });
                 }
             });
 
@@ -87,20 +80,6 @@
             entity.addEventListener('targetLost', function() {
                 console.log('Target lost');
                 video.pause();
-                aVideo.setAttribute('visible', 'false');
-            });
-
-            // Error handling
-            video.addEventListener('error', function(e) {
-                console.error('Video error:', e);
-            });
-
-            // Additional visibility handling
-            video.addEventListener('play', function() {
-                aVideo.setAttribute('visible', 'true');
-            });
-
-            video.addEventListener('pause', function() {
                 aVideo.setAttribute('visible', 'false');
             });
 
