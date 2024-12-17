@@ -38,18 +38,6 @@
           font-weight: bold;
           text-align: center;
       }
-      #startButton {
-          position: fixed;
-          bottom: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          padding: 10px 20px;
-          background: white;
-          border: none;
-          border-radius: 5px;
-          z-index: 3;
-          cursor: pointer;
-      }
     </style>
 </head>
 <body>
@@ -57,14 +45,8 @@
         <img src="assets/target.jpeg" />
         <div class="text">Scan this image</div>
     </div>
-    
-    <button id="startButton">Start Experience</button>
 
-    <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;
-                           filterMinCF: 0.001;
-                           filterBeta: 1000;
-                           warmupTolerance: 5;
-                           missTolerance: 5;"
+    <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;"
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -77,15 +59,14 @@
                    loop
                    playsinline
                    webkit-playsinline
-                   autoplay="false"
-                   crossorigin="anonymous"
-                   response-type="arraybuffer"></video>
+                   crossorigin="anonymous"></video>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
         <a-entity mindar-image-target="targetIndex: 0">
-            <a-video src="#video" 
+            <a-video id="ar-video" 
+                     src="#video" 
                      position="0 0 0" 
                      rotation="0 0 0" 
                      height="1.5"
@@ -97,31 +78,47 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const scanningOverlay = document.querySelector('#example-scanning-overlay');
-            const startButton = document.querySelector('#startButton');
             const video = document.querySelector('#video');
-            const aVideo = document.querySelector('a-video');
+            const aVideo = document.querySelector('#ar-video');
             const entity = document.querySelector('[mindar-image-target]');
             let isVideoReady = false;
+            
+            // Smoothing parameters
+            const smoothingFactor = 0.1; // Adjust between 0 and 1 (lower = smoother)
+            let smoothedPosition = { x: 0, y: 0, z: 0 };
+            let smoothedRotation = { x: 0, y: 0, z: 0 };
 
-            // Handle start button click
-            startButton.addEventListener('click', function() {
-                // Enter fullscreen on button click
-                const element = document.documentElement;
-                if (element.requestFullscreen) {
-                    element.requestFullscreen();
-                } else if (element.webkitRequestFullscreen) {
-                    element.webkitRequestFullscreen();
-                } else if (element.mozRequestFullScreen) {
-                    element.mozRequestFullScreen();
-                } else if (element.msRequestFullscreen) {
-                    element.msRequestFullscreen();
+            function exponentialSmoothing(current, target, factor) {
+                return current + factor * (target - current);
+            }
+
+            function updatePosition() {
+                if (entity.object3D.visible) {
+                    const worldPosition = new THREE.Vector3();
+                    const worldRotation = new THREE.Euler();
+                    entity.object3D.getWorldPosition(worldPosition);
+                    entity.object3D.getWorldQuaternion(new THREE.Quaternion()).toEuler(worldRotation);
+
+                    // Apply smoothing to position
+                    smoothedPosition.x = exponentialSmoothing(smoothedPosition.x, worldPosition.x, smoothingFactor);
+                    smoothedPosition.y = exponentialSmoothing(smoothedPosition.y, worldPosition.y, smoothingFactor);
+                    smoothedPosition.z = exponentialSmoothing(smoothedPosition.z, worldPosition.z, smoothingFactor);
+
+                    // Apply smoothing to rotation
+                    smoothedRotation.x = exponentialSmoothing(smoothedRotation.x, worldRotation.x * 180/Math.PI, smoothingFactor);
+                    smoothedRotation.y = exponentialSmoothing(smoothedRotation.y, worldRotation.y * 180/Math.PI, smoothingFactor);
+                    smoothedRotation.z = exponentialSmoothing(smoothedRotation.z, worldRotation.z * 180/Math.PI, smoothingFactor);
+
+                    // Apply smoothed values to video element
+                    aVideo.setAttribute('position', smoothedPosition);
+                    aVideo.setAttribute('rotation', smoothedRotation);
                 }
-                
-                // Hide the button after clicking
-                startButton.style.display = 'none';
-            });
+                requestAnimationFrame(updatePosition);
+            }
 
-            // Hide overlay when target is found
+            // Start position updates
+            updatePosition();
+
             entity.addEventListener('targetFound', function() {
                 console.log('Target found');
                 scanningOverlay.classList.add('hidden');
@@ -130,52 +127,35 @@
                     aVideo.setAttribute('visible', 'true');
                     video.currentTime = 0;
                     
-                    // Add a small delay before playing to ensure stability
-                    setTimeout(() => {
-                        video.play()
-                            .then(() => {
-                                console.log('Video playing with sound');
-                                video.volume = 1.0;
-                            })
-                            .catch(e => {
-                                console.warn('Failed to play with sound, trying muted:', e);
-                                video.muted = true;
-                                video.play().then(() => {
-                                    console.log('Video playing muted');
-                                });
-                            });
-                    }, 100);
+                    // Try to play with sound
+                    const playPromise = video.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            video.muted = false;
+                            video.volume = 1.0;
+                            console.log('Video playing with sound');
+                        }).catch(error => {
+                            console.warn('Playback failed:', error);
+                        });
+                    }
                 }
             });
 
-            // Show overlay when target is lost
             entity.addEventListener('targetLost', function() {
                 console.log('Target lost');
-                // Add a small delay before hiding to prevent flickering
-                setTimeout(() => {
-                    if (!entity.object3D.visible) {
-                        scanningOverlay.classList.remove('hidden');
-                        video.pause();
-                        aVideo.setAttribute('visible', 'false');
-                    }
-                }, 100);
+                scanningOverlay.classList.remove('hidden');
+                video.pause();
+                aVideo.setAttribute('visible', 'false');
             });
 
-            // Video loading handler
             video.addEventListener('loadeddata', function() {
                 console.log('Video data loaded');
                 isVideoReady = true;
                 video.pause();
             });
 
-            // Error handling
             video.addEventListener('error', function(e) {
                 console.error('Video error:', e);
-            });
-
-            // Handle fullscreen errors
-            document.addEventListener('fullscreenerror', function(e) {
-                console.error('Fullscreen error:', e);
             });
 
             // Initial video load
