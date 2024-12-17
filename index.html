@@ -23,6 +23,8 @@
                    loop
                    playsinline
                    webkit-playsinline
+                   muted
+                   autoplay="false"
                    crossorigin="anonymous"
                    response-type="arraybuffer"></video>
         </a-assets>
@@ -45,12 +47,18 @@
             const aVideo = document.querySelector('a-video');
             const entity = document.querySelector('[mindar-image-target]');
             let isVideoReady = false;
+            let userInteracted = false;
+
+            // Handle initial user interaction
+            document.addEventListener('touchstart', function() {
+                userInteracted = true;
+            }, { once: true });
 
             // Ensure video is loaded and ready
             video.addEventListener('loadeddata', function() {
                 console.log('Video data loaded');
                 isVideoReady = true;
-                video.pause(); // Ensure video is paused initially
+                video.pause();
             });
 
             // When target is found
@@ -58,21 +66,32 @@
                 console.log('Target found');
                 if (isVideoReady) {
                     aVideo.setAttribute('visible', 'true');
-                    // Force video to play
+                    
+                    // First try playing with sound
+                    video.muted = false;
                     video.currentTime = 0;
-                    video.play()
-                        .then(() => {
+                    const playPromise = video.play();
+                    
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
                             console.log('Video playing with sound');
                             video.volume = 1.0;
-                        })
-                        .catch(e => {
-                            console.error('Error playing video:', e);
-                            // Try playing without sound if initial attempt fails
+                        }).catch(e => {
+                            console.warn('Failed to play with sound, trying muted:', e);
+                            // If failed, try muted first
                             video.muted = true;
                             video.play().then(() => {
-                                video.muted = false;
+                                console.log('Video playing muted');
+                                // If user has interacted, try unmuting
+                                if (userInteracted) {
+                                    video.muted = false;
+                                    video.volume = 1.0;
+                                }
+                            }).catch(err => {
+                                console.error('Failed to play video even muted:', err);
                             });
                         });
+                    }
                 }
             });
 
@@ -81,6 +100,13 @@
                 console.log('Target lost');
                 video.pause();
                 aVideo.setAttribute('visible', 'false');
+            });
+
+            // Add resume capability
+            video.addEventListener('pause', function() {
+                if (entity.object3D.visible) {
+                    video.play().catch(e => console.warn('Auto-resume failed:', e));
+                }
             });
 
             // Preload video
