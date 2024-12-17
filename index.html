@@ -38,6 +38,18 @@
           font-weight: bold;
           text-align: center;
       }
+      #startButton {
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 10px 20px;
+          background: white;
+          border: none;
+          border-radius: 5px;
+          z-index: 3;
+          cursor: pointer;
+      }
     </style>
 </head>
 <body>
@@ -45,12 +57,14 @@
         <img src="assets/target.jpeg" />
         <div class="text">Scan this image</div>
     </div>
+    
+    <button id="startButton">Start Experience</button>
 
     <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;
-                           smoothCount: 20;
-                           smoothTolerance: 0.1;
-                           smoothThreshold: 10;
-                           uiScanning: false;"
+                           filterMinCF: 0.001;
+                           filterBeta: 1000;
+                           warmupTolerance: 5;
+                           missTolerance: 5;"
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -83,14 +97,15 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const scanningOverlay = document.querySelector('#example-scanning-overlay');
+            const startButton = document.querySelector('#startButton');
             const video = document.querySelector('#video');
             const aVideo = document.querySelector('a-video');
             const entity = document.querySelector('[mindar-image-target]');
             let isVideoReady = false;
-            let hasDetectedOnce = false;
 
-            // Function to enter fullscreen
-            function enterFullscreen() {
+            // Handle start button click
+            startButton.addEventListener('click', function() {
+                // Enter fullscreen on button click
                 const element = document.documentElement;
                 if (element.requestFullscreen) {
                     element.requestFullscreen();
@@ -101,43 +116,49 @@
                 } else if (element.msRequestFullscreen) {
                     element.msRequestFullscreen();
                 }
-            }
+                
+                // Hide the button after clicking
+                startButton.style.display = 'none';
+            });
 
             // Hide overlay when target is found
             entity.addEventListener('targetFound', function() {
                 console.log('Target found');
                 scanningOverlay.classList.add('hidden');
                 
-                // Enter fullscreen on first detection
-                if (!hasDetectedOnce) {
-                    hasDetectedOnce = true;
-                    enterFullscreen();
-                }
-
                 if (isVideoReady) {
                     aVideo.setAttribute('visible', 'true');
                     video.currentTime = 0;
-                    video.play()
-                        .then(() => {
-                            console.log('Video playing with sound');
-                            video.volume = 1.0;
-                        })
-                        .catch(e => {
-                            console.warn('Failed to play with sound, trying muted:', e);
-                            video.muted = true;
-                            video.play().then(() => {
-                                console.log('Video playing muted');
+                    
+                    // Add a small delay before playing to ensure stability
+                    setTimeout(() => {
+                        video.play()
+                            .then(() => {
+                                console.log('Video playing with sound');
+                                video.volume = 1.0;
+                            })
+                            .catch(e => {
+                                console.warn('Failed to play with sound, trying muted:', e);
+                                video.muted = true;
+                                video.play().then(() => {
+                                    console.log('Video playing muted');
+                                });
                             });
-                        });
+                    }, 100);
                 }
             });
 
             // Show overlay when target is lost
             entity.addEventListener('targetLost', function() {
                 console.log('Target lost');
-                scanningOverlay.classList.remove('hidden');
-                video.pause();
-                aVideo.setAttribute('visible', 'false');
+                // Add a small delay before hiding to prevent flickering
+                setTimeout(() => {
+                    if (!entity.object3D.visible) {
+                        scanningOverlay.classList.remove('hidden');
+                        video.pause();
+                        aVideo.setAttribute('visible', 'false');
+                    }
+                }, 100);
             });
 
             // Video loading handler
