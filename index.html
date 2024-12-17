@@ -7,13 +7,45 @@
     <style>
       body { margin: 0; overflow: hidden; }
       a-scene { width: 100vw; height: 100vh; }
+      #example-scanning-overlay {
+          position: fixed;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          left: 0;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.9);
+          z-index: 2;
+          transition: opacity 0.5s ease-in-out;
+      }
+      #example-scanning-overlay.hidden {
+          opacity: 0;
+          pointer-events: none;
+      }
+      #example-scanning-overlay img {
+          max-width: 300px;
+      }
+      #example-scanning-overlay .text {
+          font-size: 24px;
+          color: #ffffff;
+          margin-top: 15px;
+      }
     </style>
 </head>
 <body>
+    <div id="example-scanning-overlay">
+        <img src="assets/target.jpeg" />
+        <div class="text">Scan this image</div>
+    </div>
+
     <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;
                            smoothCount: 10;
-                           smoothTolerance: 0.01;
-                           smoothThreshold: 5;"
+                           smoothTolerance: 0.1;
+                           smoothThreshold: 5;
+                           uiScanning: false;"
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -38,7 +70,7 @@
                      position="0 0 0" 
                      rotation="0 0 0" 
                      height="1.5"
-                     width="1.2" 
+                     width="1" 
                      visible="false"></a-video>
         </a-entity>
     </a-scene>
