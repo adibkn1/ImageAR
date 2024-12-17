@@ -17,21 +17,25 @@
           right: 0;
           top: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.9);
+          background: rgba(0, 0, 0, 0.217);
           z-index: 2;
-          transition: opacity 0.5s ease-in-out;
+          opacity: 1;
+          transition: opacity 0.3s ease-in-out;
       }
       #example-scanning-overlay.hidden {
           opacity: 0;
           pointer-events: none;
       }
       #example-scanning-overlay img {
-          max-width: 300px;
+          max-width: 250px;
+          margin-bottom: 20px;
       }
       #example-scanning-overlay .text {
-          font-size: 24px;
-          color: #ffffff;
-          margin-top: 15px;
+          color: white;
+          font-family: Arial, sans-serif;
+          font-size: 20px;
+          font-weight: bold;
+          text-align: center;
       }
     </style>
 </head>
@@ -42,9 +46,9 @@
     </div>
 
     <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;
-                           smoothCount: 10;
+                           smoothCount: 20;
                            smoothTolerance: 0.1;
-                           smoothThreshold: 5;
+                           smoothThreshold: 10;
                            uiScanning: false;"
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
@@ -77,73 +81,55 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const scanningOverlay = document.querySelector('#example-scanning-overlay');
             const video = document.querySelector('#video');
             const aVideo = document.querySelector('a-video');
             const entity = document.querySelector('[mindar-image-target]');
             let isVideoReady = false;
-            let userInteracted = false;
 
-            // Handle initial user interaction
-            document.addEventListener('touchstart', function() {
-                userInteracted = true;
-            }, { once: true });
+            // Hide overlay when target is found
+            entity.addEventListener('targetFound', function() {
+                console.log('Target found');
+                scanningOverlay.classList.add('hidden');
+                if (isVideoReady) {
+                    aVideo.setAttribute('visible', 'true');
+                    video.currentTime = 0;
+                    video.play()
+                        .then(() => {
+                            console.log('Video playing with sound');
+                            video.volume = 1.0;
+                        })
+                        .catch(e => {
+                            console.warn('Failed to play with sound, trying muted:', e);
+                            video.muted = true;
+                            video.play().then(() => {
+                                console.log('Video playing muted');
+                            });
+                        });
+                }
+            });
 
-            // Ensure video is loaded and ready
+            // Show overlay when target is lost
+            entity.addEventListener('targetLost', function() {
+                console.log('Target lost');
+                scanningOverlay.classList.remove('hidden');
+                video.pause();
+                aVideo.setAttribute('visible', 'false');
+            });
+
+            // Video loading handler
             video.addEventListener('loadeddata', function() {
                 console.log('Video data loaded');
                 isVideoReady = true;
                 video.pause();
             });
 
-            // When target is found
-            entity.addEventListener('targetFound', function() {
-                console.log('Target found');
-                if (isVideoReady) {
-                    aVideo.setAttribute('visible', 'true');
-                    
-                    // First try playing with sound
-                    video.muted = false;
-                    video.currentTime = 0;
-                    const playPromise = video.play();
-                    
-                    if (playPromise !== undefined) {
-                        playPromise.then(() => {
-                            console.log('Video playing with sound');
-                            video.volume = 1.0;
-                        }).catch(e => {
-                            console.warn('Failed to play with sound, trying muted:', e);
-                            // If failed, try muted first
-                            video.muted = true;
-                            video.play().then(() => {
-                                console.log('Video playing muted');
-                                // If user has interacted, try unmuting
-                                if (userInteracted) {
-                                    video.muted = false;
-                                    video.volume = 1.0;
-                                }
-                            }).catch(err => {
-                                console.error('Failed to play video even muted:', err);
-                            });
-                        });
-                    }
-                }
+            // Error handling
+            video.addEventListener('error', function(e) {
+                console.error('Video error:', e);
             });
 
-            // When target is lost
-            entity.addEventListener('targetLost', function() {
-                console.log('Target lost');
-                video.pause();
-                aVideo.setAttribute('visible', 'false');
-            });
-
-            // Add resume capability
-            video.addEventListener('pause', function() {
-                if (entity.object3D.visible) {
-                    video.play().catch(e => console.warn('Auto-resume failed:', e));
-                }
-            });
-
-            // Preload video
+            // Initial video load
             video.load();
         });
     </script>
