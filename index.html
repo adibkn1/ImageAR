@@ -5,39 +5,41 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <style>
-      body { margin: 0; overflow: hidden; }
-      a-scene { width: 100vw; height: 100vh; }
-      #example-scanning-overlay {
-          position: fixed;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          left: 0;
-          right: 0;
-          top: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.217);
-          z-index: 2;
-          opacity: 1;
-          transition: opacity 0.3s ease-in-out;
-      }
-      #example-scanning-overlay.hidden {
-          opacity: 0;
-          pointer-events: none;
-      }
-      #example-scanning-overlay img {
-          max-width: 250px;
-          margin-bottom: 20px;
-          opacity: 0.7;
-      }
-      #example-scanning-overlay .text {
-          color: white;
-          font-family: Arial, sans-serif;
-          font-size: 20px;
-          font-weight: bold;
-          text-align: center;
-      }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+        }
+        #example-scanning-overlay {
+            position: fixed;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2;
+            opacity: 1;
+            transition: opacity 0.3s ease-in-out;
+        }
+        #example-scanning-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #example-scanning-overlay img {
+            max-width: 250px;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+        #example-scanning-overlay .text {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -46,7 +48,9 @@
         <div class="text">Scan this image</div>
     </div>
 
-    <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;"
+    <a-scene mindar-image="imageTargetSrc: https://cdn.glitch.global/284f2ea8-d7fb-4d89-8bed-0ed55398b82d/targets.mind?v=1725457382948;
+                           uiScanning: false;
+                           uiLoading: false;"
              color-space="sRGB" 
              renderer="colorManagement: true, physicallyCorrectLights" 
              vr-mode-ui="enabled: false" 
@@ -84,40 +88,34 @@
             let isVideoReady = false;
             
             // Smoothing parameters
-            const smoothingFactor = 0.1; // Adjust between 0 and 1 (lower = smoother)
+            const smoothingFactor = 0.1;
             let smoothedPosition = { x: 0, y: 0, z: 0 };
-            let smoothedRotation = { x: 0, y: 0, z: 0 };
 
-            function exponentialSmoothing(current, target, factor) {
+            function smoothValue(current, target, factor) {
                 return current + factor * (target - current);
             }
 
-            function updatePosition() {
+            function updateTransform() {
                 if (entity.object3D.visible) {
-                    const worldPosition = new THREE.Vector3();
-                    const worldRotation = new THREE.Euler();
-                    entity.object3D.getWorldPosition(worldPosition);
-                    entity.object3D.getWorldQuaternion(new THREE.Quaternion()).toEuler(worldRotation);
+                    const position = entity.object3D.position;
 
-                    // Apply smoothing to position
-                    smoothedPosition.x = exponentialSmoothing(smoothedPosition.x, worldPosition.x, smoothingFactor);
-                    smoothedPosition.y = exponentialSmoothing(smoothedPosition.y, worldPosition.y, smoothingFactor);
-                    smoothedPosition.z = exponentialSmoothing(smoothedPosition.z, worldPosition.z, smoothingFactor);
+                    // Apply smoothing
+                    smoothedPosition.x = smoothValue(smoothedPosition.x, position.x, smoothingFactor);
+                    smoothedPosition.y = smoothValue(smoothedPosition.y, position.y, smoothingFactor);
+                    smoothedPosition.z = smoothValue(smoothedPosition.z, position.z, smoothingFactor);
 
-                    // Apply smoothing to rotation
-                    smoothedRotation.x = exponentialSmoothing(smoothedRotation.x, worldRotation.x * 180/Math.PI, smoothingFactor);
-                    smoothedRotation.y = exponentialSmoothing(smoothedRotation.y, worldRotation.y * 180/Math.PI, smoothingFactor);
-                    smoothedRotation.z = exponentialSmoothing(smoothedRotation.z, worldRotation.z * 180/Math.PI, smoothingFactor);
-
-                    // Apply smoothed values to video element
-                    aVideo.setAttribute('position', smoothedPosition);
-                    aVideo.setAttribute('rotation', smoothedRotation);
+                    // Update video position
+                    aVideo.object3D.position.set(
+                        smoothedPosition.x,
+                        smoothedPosition.y,
+                        smoothedPosition.z
+                    );
                 }
-                requestAnimationFrame(updatePosition);
+                requestAnimationFrame(updateTransform);
             }
 
             // Start position updates
-            updatePosition();
+            updateTransform();
 
             entity.addEventListener('targetFound', function() {
                 console.log('Target found');
@@ -127,17 +125,15 @@
                     aVideo.setAttribute('visible', 'true');
                     video.currentTime = 0;
                     
-                    // Try to play with sound
-                    const playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        playPromise.then(() => {
+                    video.play()
+                        .then(() => {
                             video.muted = false;
                             video.volume = 1.0;
                             console.log('Video playing with sound');
-                        }).catch(error => {
+                        })
+                        .catch(error => {
                             console.warn('Playback failed:', error);
                         });
-                    }
                 }
             });
 
