@@ -19,7 +19,7 @@
             right: 0;
             top: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.159);
             z-index: 2;
             opacity: 1;
             transition: opacity 0.3s ease-in-out;
@@ -31,7 +31,7 @@
         #example-scanning-overlay img {
             max-width: 250px;
             margin-bottom: 20px;
-            opacity: 0.8;
+            opacity: 0.7;
         }
         #example-scanning-overlay .text {
             color: white;
@@ -63,7 +63,8 @@
                    loop
                    playsinline
                    webkit-playsinline
-                   crossorigin="anonymous"></video>
+                   crossorigin="anonymous"
+                   autoplay></video>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
@@ -87,9 +88,27 @@
             const entity = document.querySelector('[mindar-image-target]');
             let isVideoReady = false;
             
-            // Smoothing parameters
-            const smoothingFactor = 0.1;
-            let smoothedPosition = { x: 0, y: 0, z: 0 };
+            // Increased number of samples for smoother movement
+            const numSamples = 30;
+            const smoothingFactor = 0.03; // Reduced for smoother movement
+            
+            // Arrays to store position history
+            const positionHistory = Array(numSamples).fill().map(() => ({x: 0, y: 0, z: 0}));
+            let currentSample = 0;
+
+            function getAveragePosition() {
+                const avg = {x: 0, y: 0, z: 0};
+                positionHistory.forEach(pos => {
+                    avg.x += pos.x;
+                    avg.y += pos.y;
+                    avg.z += pos.z;
+                });
+                return {
+                    x: avg.x / numSamples,
+                    y: avg.y / numSamples,
+                    z: avg.z / numSamples
+                };
+            }
 
             function smoothValue(current, target, factor) {
                 return current + factor * (target - current);
@@ -98,17 +117,30 @@
             function updateTransform() {
                 if (entity.object3D.visible) {
                     const position = entity.object3D.position;
+                    
+                    // Update position history
+                    positionHistory[currentSample] = {
+                        x: position.x,
+                        y: position.y,
+                        z: position.z
+                    };
+                    currentSample = (currentSample + 1) % numSamples;
 
-                    // Apply smoothing
-                    smoothedPosition.x = smoothValue(smoothedPosition.x, position.x, smoothingFactor);
-                    smoothedPosition.y = smoothValue(smoothedPosition.y, position.y, smoothingFactor);
-                    smoothedPosition.z = smoothValue(smoothedPosition.z, position.z, smoothingFactor);
+                    // Get averaged position
+                    const avgPosition = getAveragePosition();
+
+                    // Apply additional smoothing
+                    const smoothedPos = {
+                        x: smoothValue(aVideo.object3D.position.x || 0, avgPosition.x, smoothingFactor),
+                        y: smoothValue(aVideo.object3D.position.y || 0, avgPosition.y, smoothingFactor),
+                        z: smoothValue(aVideo.object3D.position.z || 0, avgPosition.z, smoothingFactor)
+                    };
 
                     // Update video position
                     aVideo.object3D.position.set(
-                        smoothedPosition.x,
-                        smoothedPosition.y,
-                        smoothedPosition.z
+                        smoothedPos.x,
+                        smoothedPos.y,
+                        smoothedPos.z
                     );
                 }
                 requestAnimationFrame(updateTransform);
@@ -117,6 +149,29 @@
             // Start position updates
             updateTransform();
 
+            // Function to handle video playback
+            function playVideo() {
+                if (!video.playing) {
+                    video.play().then(() => {
+                        video.muted = false;
+                        video.volume = 1.0;
+                        console.log('Video playing with sound');
+                    }).catch(error => {
+                        console.warn('Initial playback failed, trying muted:', error);
+                        video.muted = true;
+                        video.play().then(() => {
+                            // Try to unmute after a short delay
+                            setTimeout(() => {
+                                video.muted = false;
+                                video.volume = 1.0;
+                            }, 1000);
+                        }).catch(err => {
+                            console.error('Failed to play video:', err);
+                        });
+                    });
+                }
+            }
+
             entity.addEventListener('targetFound', function() {
                 console.log('Target found');
                 scanningOverlay.classList.add('hidden');
@@ -124,16 +179,7 @@
                 if (isVideoReady) {
                     aVideo.setAttribute('visible', 'true');
                     video.currentTime = 0;
-                    
-                    video.play()
-                        .then(() => {
-                            video.muted = false;
-                            video.volume = 1.0;
-                            console.log('Video playing with sound');
-                        })
-                        .catch(error => {
-                            console.warn('Playback failed:', error);
-                        });
+                    playVideo();
                 }
             });
 
@@ -150,9 +196,12 @@
                 video.pause();
             });
 
-            video.addEventListener('error', function(e) {
-                console.error('Video error:', e);
-            });
+            // Add touch event to help with video playback on mobile
+            document.addEventListener('touchstart', function() {
+                if (isVideoReady && entity.object3D.visible) {
+                    playVideo();
+                }
+            }, { once: true });
 
             // Initial video load
             video.load();
